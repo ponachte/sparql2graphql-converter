@@ -1,5 +1,7 @@
 # SPARQL to GraphQL Query Mapper
 
+[![npm](https://img.shields.io/npm/v/@comunica-graphql/sparql2graphql-converter.svg)](https://www.npmjs.com/package/@comunica-graphql/sparql2graphql-converter)
+
 A library that converts **SPARQL queries into GraphQL queries** using a GraphQL schema annotated with RDF metadata, and converts the **GraphQL response back into RDF bindings**.
 
 This allows you to query RDF data through a **GraphQL API** while still working with **SPARQL-style queries and RDF terms** in your application.
