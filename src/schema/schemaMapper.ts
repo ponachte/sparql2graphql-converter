@@ -121,23 +121,36 @@ export class SchemaMapper {
   }
 
   private expandEdgeSets(edges: Edge[]): Edge[][] {
+    // Start with a single empty combination.
+    // We will iteratively expand this as we process edges.
     let combos: Edge[][] = [[]];
 
     for (const edge of edges) {
+      // Determine the possible orientations of this edge
+      // based on the schema (normal / reversed).
       const variants = this.edgeVariants(edge);
+
+      // If the schema supports neither normal nor reversed usage
+      // for this predicate, then no valid tree can exist.
       if (variants.length === 0) return [];
 
       const next: Edge[][] = [];
 
+      // For every combination we have built so far,
+      // attach each possible variant of the current edge.
       for (const combo of combos) {
         for (const v of variants) {
+          // Create a new combination by appending the variant.
           next.push([...combo, v]);
         }
       }
 
+      // Replace the current combinations with the expanded ones.
       combos = next;
     }
 
+    // Each element in `combos` now represents a full set of edges
+    // with a specific orientation choice for every predicate.
     return combos;
   }
 
@@ -299,14 +312,16 @@ export class ScalarFieldMapper implements FieldMapper {
   }
 
   toQuery(node: TreeNode, responseMapper: ResponseMapper): string {
+    responseMapper.addContext(this.field.name);
     let query = this.field.name;
 
     if (node.term.termType === 'Variable') {
-      responseMapper.addVarMapping(node.term.value, this.field.name);
+      responseMapper.addVarMapping(node.term.value);
     } else if (node.term.termType === 'Literal') {
       query += ` @filter(if: "${this.field.name}==${valueFromLiteral(node.term)}") `;
     }
 
+    responseMapper.removeContext();
     return query.replaceAll(/\s+/ug, ' ').trim();
   }
 
@@ -369,24 +384,26 @@ export class RawRDFFieldMapper implements FieldMapper {
   }
 
   toQuery(node: TreeNode, responseMapper: ResponseMapper): string {
+    responseMapper.addContext(this.field.name);
     let query = this.field.name;
 
     if (node.term.termType === 'Variable') {
       query += ' { _rawRDF } ';
-      responseMapper.addVarMapping(node.term.value, `${this.field.name}__rawRDF`);
+      responseMapper.addVarMapping(node.term.value, "_rawRDF");
     } else if (node.term.termType === 'Literal') {
       query += ' { _rawRDF } ';
-      responseMapper.addFilterMapping(`${this.field.name}__rawRDF`, {
+      responseMapper.addFilterMapping({
         '@value': node.term.value,
         '@type': node.term.datatype.value,
       });
     } else if (node.term.termType === 'NamedNode') {
       query += ' { _rawRDF } ';
-      responseMapper.addFilterMapping(`${this.field.name}__rawRDF`, {
+      responseMapper.addFilterMapping({
         '@id': node.term.value,
       });
     }
 
+    responseMapper.removeContext();
     return query.replaceAll(/\s+/ug, ' ').trim();
   }
 
@@ -467,6 +484,7 @@ export class TypeFieldMapper implements FieldMapper {
   }
 
   public toQuery(node: TreeNode, responseMapper: ResponseMapper): string {
+    responseMapper.addContext(this.field.name);
     let query = this.field.name;
 
     if (Object.keys(node.children).length > 0) {
@@ -479,7 +497,7 @@ export class TypeFieldMapper implements FieldMapper {
 
       if (node.term.termType === 'Variable') {
         query += `${this.id()} `;
-        responseMapper.addVarMapping(node.term.value, `${this.field.name}_${this.id()}`);
+        responseMapper.addVarMapping(node.term.value, this.id());
       }
 
       // Recursively add children
@@ -493,13 +511,14 @@ export class TypeFieldMapper implements FieldMapper {
       query += '} ';
     } else if (node.term.termType === 'Variable') {
       query += ' { id } ';
-      responseMapper.addVarMapping(node.term.value, `${this.field.name}_id`);
+      responseMapper.addVarMapping(node.term.value, "id");
     } else if (node.term.termType === 'Literal') {
       query += ` @filter(if: "${this.field.name}==${valueFromLiteral(node.term)}") `;
     } else if (node.term.termType === 'NamedNode') {
       query += `(id: "${node.term.value}") { id } `;
     }
 
+    responseMapper.removeContext();
     return query.replaceAll(/\s+/ug, ' ').trim();
   }
 

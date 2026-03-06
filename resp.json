@@ -1,0 +1,262 @@
+{
+    "observations": [
+      {
+        "id": "http://example.org/Observatione85bc463-558a-4a3c-b31f-8ba71e3bbe85",
+        "value": 77,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:35:10.802Z"
+      },
+      {
+        "id": "http://example.org/Observation0c06a272-1574-424a-86a3-29c3ff0ddbbf",
+        "value": 92,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:27:28.446Z"
+      },
+      {
+        "id": "http://example.org/Observation1b94b475-4e2d-4c7a-a5a2-632ab95f9921",
+        "value": 66,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:32:41.090Z"
+      },
+      {
+        "id": "http://example.org/Observation562d716e-3102-4305-86cb-d331b2f23707",
+        "value": 85,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:36:10.695Z"
+      },
+      {
+        "id": "http://example.org/Observation58dce020-77ee-4d43-ad9b-7ef718431736",
+        "value": 88,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:34:30.919Z"
+      },
+      {
+        "id": "http://example.org/Observation1dd1ffbe-0e42-4d56-a75c-daacbf62b99a",
+        "value": 76,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:35:40.747Z"
+      },
+      {
+        "id": "http://example.org/Observationa96e8056-2469-418a-b878-31e166527058",
+        "value": 72,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:28:41.449Z"
+      },
+      {
+        "id": "http://example.org/Observation90cbc9e7-3925-4c7a-906b-04ec19b4e437",
+        "value": 73,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:35:20.804Z"
+      },
+      {
+        "id": "http://example.org/Observation8e13720e-2063-40b3-bfe7-cf715ee468a7",
+        "value": 63,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:35:50.750Z"
+      },
+      {
+        "id": "http://example.org/Observationd69204df-99bd-40e6-b276-8c45b54d057c",
+        "value": 89,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:31:21.265Z"
+      },
+      {
+        "id": "http://example.org/Observationdb3656fd-6775-4c87-b85e-eb93cf965853",
+        "value": 87,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:29:11.387Z"
+      },
+      {
+        "id": "http://example.org/Observation0d3c28e3-6634-47f3-9c7e-1cdd7eb55c36",
+        "value": 75,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:32:51.091Z"
+      },
+      {
+        "id": "http://example.org/Observation76abcbd9-5bef-4ade-a9dc-4ec41c93f77e",
+        "value": 72,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:36:20.696Z"
+      },
+      {
+        "id": "http://example.org/Observation825ec107-264e-406d-a3ac-e46ac656c50f",
+        "value": 62,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:29:31.393Z"
+      },
+      {
+        "id": "http://example.org/Observationd309e449-bba2-4d7c-89ca-e5d19043fb13",
+        "value": 77,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:35:00.860Z"
+      },
+      {
+        "id": "http://example.org/Observation65c4e1df-d394-4ac4-9b99-fb556d4ae45b",
+        "value": 75,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:31:31.267Z"
+      },
+      {
+        "id": "http://example.org/Observation7509276f-891d-44c9-936a-719ca043f8fa",
+        "value": 66,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:32:21.145Z"
+      },
+      {
+        "id": "http://example.org/Observation0608d920-119c-4f40-a0af-4c039c677554",
+        "value": 91,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:34:10.913Z"
+      },
+      {
+        "id": "http://example.org/Observation611ae736-0d59-4043-bde4-b2cdb00afc8c",
+        "value": 70,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:34:20.916Z"
+      },
+      {
+        "id": "http://example.org/Observationf0ded26f-b57d-4883-831b-7a3ae6ef45de",
+        "value": 86,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:33:50.972Z"
+      },
+      {
+        "id": "http://example.org/Observation864ab181-a6f8-4d02-b637-96f35da25686",
+        "value": 76,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:32:31.148Z"
+      },
+      {
+        "id": "http://example.org/Observationa0bcb6c1-0ada-4973-be20-43e6633bcea5",
+        "value": 71,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:32:01.205Z"
+      },
+      {
+        "id": "http://example.org/Observation82ced204-4939-4d9d-b8c7-d40567947c1a",
+        "value": 70,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:36:00.755Z"
+      },
+      {
+        "id": "http://example.org/Observation2eb98dea-8d3f-4cdb-815c-f1610c1a88ea",
+        "value": 78,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:31:41.202Z"
+      },
+      {
+        "id": "http://example.org/Observation7961415c-c2c1-42cc-8a6a-fc1dd7c14a59",
+        "value": 76,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:33:31.036Z"
+      },
+      {
+        "id": "http://example.org/Observation8e0cf4a6-ddd0-415f-b1e5-0c4c1e74f0cd",
+        "value": 87,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:28:51.450Z"
+      },
+      {
+        "id": "http://example.org/Observationd8373ff6-1701-444a-bc9d-dfa6300ba972",
+        "value": 99,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:27:38.390Z"
+      },
+      {
+        "id": "http://example.org/Observation4de09cfb-b5a2-4eff-b8f8-e210cd68585d",
+        "value": 95,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:33:11.033Z"
+      },
+      {
+        "id": "http://example.org/Observation37da3961-04a0-4f1e-8dac-9feb20192a3d",
+        "value": 99,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:33:21.036Z"
+      },
+      {
+        "id": "http://example.org/Observation9f8f3813-2602-4f22-96e3-91c953f7646e",
+        "value": 66,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:29:41.327Z"
+      },
+      {
+        "id": "http://example.org/Observation043f3c2e-c420-442a-bd59-3bdd97252ba7",
+        "value": 94,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:36:30.698Z"
+      },
+      {
+        "id": "http://example.org/Observation03f84f6d-849f-4f52-b9bd-6dd40064d173",
+        "value": 85,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:34:40.855Z"
+      },
+      {
+        "id": "http://example.org/Observation6eac3e76-a0c3-4938-aede-8e5009fc0827",
+        "value": 83,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:31:51.203Z"
+      },
+      {
+        "id": "http://example.org/Observatione7563ff5-0589-4ede-8449-227ea4a9eed6",
+        "value": 79,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:32:11.142Z"
+      },
+      {
+        "id": "http://example.org/Observation347f926f-d842-40d2-b788-6820d6c183de",
+        "value": 97,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:35:30.808Z"
+      },
+      {
+        "id": "http://example.org/Observation5b986c56-04be-4df1-b29a-29c2c4b0ec3e",
+        "value": 65,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:29:21.391Z"
+      },
+      {
+        "id": "http://example.org/Observationca8f2da5-2960-450b-a47b-c8f86de9e583",
+        "value": 96,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:36:40.640Z"
+      },
+      {
+        "id": "http://example.org/Observation25dfb67c-dbd8-44ed-b8f4-0086925cf8d3",
+        "value": 75,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:33:01.093Z"
+      },
+      {
+        "id": "http://example.org/Observationb92e1eba-531f-4ccc-8917-02709f466186",
+        "value": 94,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:29:01.453Z"
+      },
+      {
+        "id": "http://example.org/Observation9276a810-bca2-4c4b-9621-5ace3a370a09",
+        "value": 77,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:33:40.968Z"
+      },
+      {
+        "id": "http://example.org/Observation049e64df-d631-4d9d-a82d-5bf370516727",
+        "value": 64,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:31:11.264Z"
+      },
+      {
+        "id": "http://example.org/Observationa0409151-2727-48a7-ac57-9517ac0a5695",
+        "value": 85,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:34:50.857Z"
+      },
+      {
+        "id": "http://example.org/Observationb0d160f0-52c8-49d9-9c05-63970f9d5962",
+        "value": 86,
+        "ex_unit": "kg",
+        "atTime": "2026-03-05T09:34:00.976Z"
+      }
+  ]
+}
