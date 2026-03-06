@@ -1,192 +1,179 @@
-import { buildSchema } from "graphql";
-import { getCustomObjectTypes, getFieldPredicate, getTypeIRI, valueFromLiteral } from '../utils/utils';
-import { Edge, RawRDF, TreeNode, Trees } from '../types';
-import type * as RDF from '@rdfjs/types';
-import type { GraphQLArgument, GraphQLField, GraphQLObjectType } from 'graphql';
-import { getNamedType, GraphQLID, isScalarType, GraphQLNonNull } from 'graphql';
-import { getLogger } from '../utils/logger';
+import { buildSchema, getNamedType, GraphQLID, isScalarType, GraphQLNonNull } from "graphql";
+import { getCustomObjectTypes, getFieldPredicate, getTypeIRI, valueFromLiteral } from "../utils/utils";
+import { Edge, TreeNode } from "../types";
+import type * as RDF from "@rdfjs/types";
+import type { GraphQLArgument, GraphQLField, GraphQLObjectType } from "graphql";
+import { getLogger } from "../utils/logger";
 import { ResponseMapper } from "../converter/responseMapper";
 import { collectEdges, buildTrees } from "../utils/trees";
 
-export class SchemaMapper {
+function resolveIRI(
+  iri: string | undefined,
+  fallback: string,
+  schema: SchemaMapper
+) {
+  return iri ? schema.replaceSPARQLPrefix(iri) : schema.toSPARQLContext(fallback);
+}
 
-  private readonly subscriptionFields: FieldMapper[] = [];
-  private readonly queryFields: FieldMapper[] = [];
-  private readonly context: Record<string, string>;
+function filterFields(fields: FieldMapper[], node: TreeNode): FieldMapper[] {
+  return fields.filter(field => {
+    if (node.type && !field.withType(node.type)) return false;
+    if (!field.withSubject(node.term)) return false;
 
-  private readonly types: Map<string, TypeMapper>;
-
-  constructor(schemaSource: string, schemaContext: Record<string, string>) {
-    this.context = schemaContext;
-    schemaSource = `
-    scalar BoxedLiteral
-    scalar RDFNode
-    scalar DateTime
-    scalar Date
-    scalar Time
-    ${schemaSource}
-    `;
-    const schema = buildSchema(schemaSource, {
-      assumeValidSDL: true,
-    });
-
-    const subcriptionType = schema.getSubscriptionType();
-    const queryType = schema.getQueryType();
-    if (!subcriptionType && !queryType) {
-      throw new Error("Schema needs atleast a Subcription or Query type defined");
+    for (const [p, child] of Object.entries(node.children)) {
+      if (!field.withPredicate(p, child)) return false;
     }
 
-    this.types = new Map<string, TypeMapper>();
+    return true;
+  });
+}
+
+export class SchemaMapper {
+
+  private subscriptionFields: FieldMapper[] = [];
+  private queryFields: FieldMapper[] = [];
+
+  private readonly types = new Map<string, TypeMapper>();
+  private readonly prefixes: [string, string][];
+
+  constructor(schemaSource: string, private readonly context: Record<string, string>) {
+
+    this.prefixes = Object.entries(context);
+
+    schemaSource = `
+      scalar BoxedLiteral
+      scalar RDFNode
+      scalar DateTime
+      scalar Date
+      scalar Time
+      ${schemaSource}
+    `;
+
+    const schema = buildSchema(schemaSource, { assumeValidSDL: true });
+
+    const subType = schema.getSubscriptionType();
+    const queryType = schema.getQueryType();
+
+    if (!subType && !queryType) {
+      throw new Error("Schema needs at least a Subscription or Query type");
+    }
+
     for (const type of Object.values(getCustomObjectTypes(schema))) {
       const mapper = new TypeMapper(type, this);
       this.types.set(mapper.getIRI(), mapper);
     }
 
-    if (subcriptionType) {
-      this.subscriptionFields = Object.values(subcriptionType.getFields()).map(field => FieldMapperFactory.map(field, this));
-    }
-    if (queryType) {
-      this.queryFields = Object.values(queryType.getFields()).map(field => FieldMapperFactory.map(field, this));
-    }
+    if (subType)
+      this.subscriptionFields = Object.values(subType.getFields())
+        .map(f => FieldMapperFactory.map(f, this));
+
+    if (queryType)
+      this.queryFields = Object.values(queryType.getFields())
+        .map(f => FieldMapperFactory.map(f, this));
   }
 
-  public supportsQuery(node: TreeNode): FieldMapper[] {
+  supportsQuery(node: TreeNode) {
     return filterFields(this.queryFields, node);
   }
 
-  public supportsSubscription(node: TreeNode): FieldMapper[] {
+  supportsSubscription(node: TreeNode) {
     return filterFields(this.subscriptionFields, node);
   }
 
-  public getField(typeIRI: string, fieldIRI: string): FieldMapper | undefined {
+  getField(typeIRI: string, fieldIRI: string) {
     return this.types.get(typeIRI)?.getField(fieldIRI);
   }
 
-  public toGraphQLContext(sparqlValue: string): string {
-    for (const [ prefix, ns ] of Object.entries(this.context)) {
-      if (sparqlValue.startsWith(prefix + ":")) {
-        const suffix = sparqlValue.slice(prefix.length + 1);
-        return `${prefix}_${suffix}`;
-      }
-      if (sparqlValue.startsWith(ns)) {
-        const suffix = sparqlValue.slice(ns.length);
-        return `${prefix}_${suffix}`;
-      }
+  toGraphQLContext(value: string): string {
+    for (const [prefix, ns] of this.prefixes) {
+      if (value.startsWith(prefix + ":"))
+        return `${prefix}_${value.slice(prefix.length + 1)}`;
+      if (value.startsWith(ns))
+        return `${prefix}_${value.slice(ns.length)}`;
     }
 
-    throw new Error(`Missing predicate prefix in context: ${sparqlValue}`);
+    throw new Error(`Missing predicate prefix in context: ${value}`);
   }
 
-  public toSPARQLContext(graphqlValue: string): string {
-    for (const [ prefix, ns ] of Object.entries(this.context)) {
-      if (graphqlValue.startsWith(prefix + "_")) {
-        const suffix = graphqlValue.slice(prefix.length + 1);
-        return `${ns}${suffix}`;
-      }
+  toSPARQLContext(value: string): string {
+    for (const [prefix, ns] of this.prefixes) {
+      if (value.startsWith(prefix + "_"))
+        return ns + value.slice(prefix.length + 1);
     }
-    return graphqlValue;
+    return value;
   }
 
-  public replaceSPARQLPrefix(sparqlValue: string): string {
-    for (const [ prefix, ns ] of Object.entries(this.context)) {
-      if (sparqlValue.startsWith(prefix + ":")) {
-        const suffix = sparqlValue.slice(prefix.length + 1);
-        return `${ns}${suffix}`;
-      }
+  replaceSPARQLPrefix(value: string): string {
+    for (const [prefix, ns] of this.prefixes) {
+      if (value.startsWith(prefix + ":"))
+        return ns + value.slice(prefix.length + 1);
     }
-    return sparqlValue;
+    return value;
   }
 
-  public calculatePossibleTrees(root: TreeNode): TreeNode[] {
+  calculatePossibleTrees(root: TreeNode): TreeNode[] {
+
     const edges = collectEdges(root);
-    const combos = this.expandEdgeSets(edges);
 
-    const trees = combos.map(edges => buildTrees(edges));
+    const combos = edges.reduce<Edge[][]>((combos, edge) => {
 
-    return trees.filter(t => t.roots.length === 1).map(t => t.roots[0])
+      const variants = this.edgeVariants(edge);
+      if (!variants.length) return [];
+
+      return combos.flatMap(c => variants.map(v => [...c, v]));
+
+    }, [[]]);
+
+    return combos
+      .map(edges => buildTrees(edges))
+      .filter(t => t.roots.length === 1)
+      .map(t => t.roots[0]);
   }
 
   private getPredicateFields(pred: string) {
-    const fields = [];
+
+    const fields: FieldMapper[] = [];
 
     for (const type of this.types.values()) {
       for (const field of type.getFields().values()) {
-        if (field.getIRI() === pred) {
+        if (field.getIRI() === pred)
           fields.push(field);
-        }
       }
     }
 
     return fields;
   }
 
-  private expandEdgeSets(edges: Edge[]): Edge[][] {
-    // Start with a single empty combination.
-    // We will iteratively expand this as we process edges.
-    let combos: Edge[][] = [[]];
-
-    for (const edge of edges) {
-      // Determine the possible orientations of this edge
-      // based on the schema (normal / reversed).
-      const variants = this.edgeVariants(edge);
-
-      // If the schema supports neither normal nor reversed usage
-      // for this predicate, then no valid tree can exist.
-      if (variants.length === 0) return [];
-
-      const next: Edge[][] = [];
-
-      // For every combination we have built so far,
-      // attach each possible variant of the current edge.
-      for (const combo of combos) {
-        for (const v of variants) {
-          // Create a new combination by appending the variant.
-          next.push([...combo, v]);
-        }
-      }
-
-      // Replace the current combinations with the expanded ones.
-      combos = next;
-    }
-
-    // Each element in `combos` now represents a full set of edges
-    // with a specific orientation choice for every predicate.
-    return combos;
-  }
-
   private edgeVariants(edge: Edge): Edge[] {
+
     const fields = this.getPredicateFields(edge.predicate);
 
     const hasNormal = fields.some(f => !f.reversed);
     const hasReversed = fields.some(f => f.reversed);
 
-    if (!hasNormal && !hasReversed) {
-      return [];
-    }
+    if (!hasNormal && !hasReversed) return [];
 
-    const variants: Edge[] = [];
+    const variants = [];
 
-    if (hasNormal) {
-      variants.push(edge);
-    }
+    if (hasNormal) variants.push(edge);
 
     if (hasReversed) {
       variants.push({
         subject: edge.object,
         predicate: edge.predicate,
-        object: edge.subject,
+        object: edge.subject
       });
     }
 
     return variants;
   }
 
-  public rep() {
+  rep() {
     return {
-      "type": "schema",
-      "types": [...this.types.values()].map(m => m.rep()),
-      "query": this.queryFields.map(m => m.getName()),
-      "subscribe": this.subscriptionFields.map(m => m.getName())
+      type: "schema",
+      types: [...this.types.values()].map(t => t.rep()),
+      query: this.queryFields.map(f => f.getName()),
+      subscribe: this.subscriptionFields.map(f => f.getName())
     };
   }
 }
@@ -194,41 +181,37 @@ export class SchemaMapper {
 export class TypeMapper {
 
   private readonly iri: string;
-  private readonly fields: Map<string, FieldMapper>;
+  private readonly fields = new Map<string, FieldMapper>();
 
-  constructor(type: GraphQLObjectType<any, any>, schemaMapper: SchemaMapper) {
+  constructor(type: GraphQLObjectType, schema: SchemaMapper) {
+
     const typeIRI = getTypeIRI(type);
-    if (typeIRI) {
-      // Replace prefixes
-      this.iri = schemaMapper.replaceSPARQLPrefix(typeIRI);
-    } else {
-      // set type IRI to field type name in sparql context
-      this.iri = schemaMapper.toSPARQLContext(type.name);
-    }
+    this.iri = typeIRI
+      ? schema.replaceSPARQLPrefix(typeIRI)
+      : schema.toSPARQLContext(type.name);
 
-    this.fields = new Map<string, FieldMapper>();
     for (const field of Object.values(type.getFields())) {
-      const mapper = FieldMapperFactory.map(field, schemaMapper);
+      const mapper = FieldMapperFactory.map(field, schema);
       this.fields.set(mapper.getIRI(), mapper);
     }
   }
 
-  public getIRI(): string {
+  getIRI() {
     return this.iri;
   }
 
-  public getField(iri: string): FieldMapper | undefined {
+  getField(iri: string) {
     return this.fields.get(iri);
   }
 
-  public getFields() {
+  getFields() {
     return this.fields;
   }
 
-  public rep() {
+  rep() {
     return {
-      "type": this.getIRI(),
-      "fields": [...this.fields.values()].map(m => m.rep()),
+      type: this.iri,
+      fields: [...this.fields.values()].map(f => f.rep())
     };
   }
 }
@@ -244,347 +227,277 @@ interface FieldMapper {
   rep(): object
 }
 
-class FieldMapperFactory {
-  static map(field: GraphQLField<any, any, any>, schemaMapper: SchemaMapper): FieldMapper {
-    const fieldType = <GraphQLObjectType>getNamedType(field.type);
-    if (isScalarType(fieldType)) {
-      if (fieldType.name === 'RDFNode' || fieldType.name === 'BoxedLiteral') {
-        return new RawRDFFieldMapper(field, fieldType.name, schemaMapper);
-      }
-      return new ScalarFieldMapper(field, fieldType.name, schemaMapper);
-    }
-    return new TypeFieldMapper(field, fieldType, schemaMapper);
-  }
-}
+abstract class BaseFieldMapper implements FieldMapper {
 
-export class ScalarFieldMapper implements FieldMapper {
+  protected field: GraphQLField<any, any, any>;
+  protected fieldIRI: string;
+  readonly reversed: boolean;
 
-  private readonly field: GraphQLField<any, any, any>;
-  private readonly type: string
-  private readonly fieldIRI: string;
-  public readonly reversed: boolean;
+  constructor(field: GraphQLField<any, any, any>, schema: SchemaMapper) {
 
-  constructor(field: GraphQLField<any, any, any>, type: string, schemaMapper: SchemaMapper) {
     this.field = field;
-    this.type = type;
 
-    // --- Field Predicate --- //
-    // parse @predicate decorator
-    const [ fieldIRI, reverse ] = getFieldPredicate(this.field);
-    if (fieldIRI) {
-      // Replace prefixes
-      this.fieldIRI = schemaMapper.replaceSPARQLPrefix(fieldIRI);
-    } else {
-      // set field IRI to field name in sparql context
-      this.fieldIRI = schemaMapper.toSPARQLContext(this.field.name);
-    }
-    this.reversed = reverse;
+    const [iri, reversed] = getFieldPredicate(field);
+
+    this.fieldIRI = resolveIRI(iri, field.name, schema);
+    this.reversed = reversed;
   }
-  
-  getName(): string {
+
+  getName() {
     return this.field.name;
   }
 
-  getIRI(): string {
+  getIRI() {
     return this.fieldIRI;
   }
 
-  withSubject(obj: RDF.Term): boolean {
-    getLogger().debug(`Field ${this.field.name} Subject Check`);
-    if (obj.termType === "Variable") {
-      getLogger().debug(`\t${obj.termType} ${obj.value} -> always true`);
+  abstract withPredicate(pred: string, node: TreeNode): boolean;
+  abstract withType(type: RDF.Term): boolean;
+  abstract withSubject(obj: RDF.Term): boolean;
+  abstract toQuery(node: TreeNode, responseMapper: ResponseMapper): string;
+  abstract rep(): object;
+}
+
+class FieldMapperFactory {
+
+  static map(field: GraphQLField<any, any, any>, schema: SchemaMapper): FieldMapper {
+
+    const type = getNamedType(field.type);
+
+    if (!isScalarType(type))
+      return new TypeFieldMapper(field, type as GraphQLObjectType, schema);
+
+    if (type.name === "RDFNode" || type.name === "BoxedLiteral")
+      return new RawRDFFieldMapper(field, type.name, schema);
+
+    return new ScalarFieldMapper(field, type.name, schema);
+  }
+}
+
+export class ScalarFieldMapper extends BaseFieldMapper {
+
+  constructor(
+    field: GraphQLField<any, any, any>,
+    private type: string,
+    schema: SchemaMapper
+  ) {
+    super(field, schema);
+  }
+
+  withSubject(obj: RDF.Term) {
+
+    if (obj.termType === "Variable")
       return true;
-    }
-    if (this.type == "ID") {
-      getLogger().debug(`\tID -> NamedNode ${obj.value} ? ${obj.termType === "NamedNode"}`);
+
+    if (this.type === "ID")
       return obj.termType === "NamedNode";
-    }
-    getLogger().debug(`\tother scalar type -> Literal ${obj.value} ? ${obj.termType === "Literal"}`);
+
     return obj.termType === "Literal";
   }
 
-  withPredicate(pred: string, node: TreeNode): boolean {
-    return false;
-  }
+  withPredicate() { return false; }
 
-  withType(type: RDF.Term): boolean {
-    return false;
-  }
+  withType() { return false; }
 
-  toQuery(node: TreeNode, responseMapper: ResponseMapper): string {
+  toQuery(node: TreeNode, responseMapper: ResponseMapper) {
+
     responseMapper.addContext(this.field.name);
+
     let query = this.field.name;
 
-    if (node.term.termType === 'Variable') {
+    if (node.term.termType === "Variable")
       responseMapper.addVarMapping(node.term.value);
-    } else if (node.term.termType === 'Literal') {
-      query += ` @filter(if: "${this.field.name}==${valueFromLiteral(node.term)}") `;
-    }
+
+    else if (node.term.termType === "Literal")
+      query += ` @filter(if: "${this.field.name}==${valueFromLiteral(node.term)}")`;
 
     responseMapper.removeContext();
-    return query.replaceAll(/\s+/ug, ' ').trim();
+
+    return query.trim();
   }
 
-  public rep() {
+  rep() {
     return {
-      "scalar type": this.type,
-      "reversed": this.reversed,
-      "graphql": this.getName(),
-      "sparql": this.getIRI()
+      scalar: this.type,
+      reversed: this.reversed,
+      graphql: this.getName(),
+      sparql: this.getIRI()
     };
   }
-  
 }
 
-export class RawRDFFieldMapper implements FieldMapper {
+export class RawRDFFieldMapper extends BaseFieldMapper {
 
-  private readonly field: GraphQLField<any, any, any>;
-  private readonly type: string;
-  private readonly fieldIRI: string;
-  public readonly reversed: boolean;
-
-  constructor(field: GraphQLField<any, any, any>, type: string, schemaMapper: SchemaMapper) {
-    this.field = field;
-    this.type = type;
-
-    // --- Field Predicate --- //
-    // parse @predicate decorator
-    const [ fieldIRI, reversed ] = getFieldPredicate(this.field);
-    if (fieldIRI) {
-      // Replace prefixes
-      this.fieldIRI = schemaMapper.replaceSPARQLPrefix(fieldIRI);
-    } else {
-      // set field IRI to field name in sparql context
-      this.fieldIRI = schemaMapper.toSPARQLContext(this.field.name);
-    }
-    this.reversed = reversed;
-  }
-  
-  getName(): string {
-    return this.field.name;
+  constructor(
+    field: GraphQLField<any, any, any>,
+    private type: string,
+    schema: SchemaMapper
+  ) {
+    super(field, schema);
   }
 
-  getIRI(): string {
-    return this.fieldIRI;
+  withSubject(obj: RDF.Term) {
+    return obj.termType !== "NamedNode" || this.type === "RDFNode";
   }
 
-  withSubject(obj: RDF.Term): boolean {
-    if (obj.termType === "NamedNode") {
-      return this.type === 'RDFNode';
-    }
-    return true;
-  }
+  withPredicate() { return false; }
 
-  withPredicate(pred: string, node: TreeNode): boolean {
-    return false;
-  }
+  withType() { return false; }
 
-  withType(type: RDF.Term): boolean {
-    return false;
-  }
+  toQuery(node: TreeNode, responseMapper: ResponseMapper) {
 
-  toQuery(node: TreeNode, responseMapper: ResponseMapper): string {
     responseMapper.addContext(this.field.name);
-    let query = this.field.name;
 
-    if (node.term.termType === 'Variable') {
-      query += ' { _rawRDF } ';
+    let query = `${this.field.name} { _rawRDF }`;
+
+    if (node.term.termType === "Variable")
       responseMapper.addVarMapping(node.term.value, "_rawRDF");
-    } else if (node.term.termType === 'Literal') {
-      query += ' { _rawRDF } ';
+
+    else if (node.term.termType === "Literal")
       responseMapper.addFilterMapping({
-        '@value': node.term.value,
-        '@type': node.term.datatype.value,
+        "@value": node.term.value,
+        "@type": node.term.datatype.value
       });
-    } else if (node.term.termType === 'NamedNode') {
-      query += ' { _rawRDF } ';
-      responseMapper.addFilterMapping({
-        '@id': node.term.value,
-      });
-    }
+
+    else if (node.term.termType === "NamedNode")
+      responseMapper.addFilterMapping({ "@id": node.term.value });
 
     responseMapper.removeContext();
-    return query.replaceAll(/\s+/ug, ' ').trim();
+
+    return query;
   }
 
-  public rep() {
+  rep() {
     return {
-      "rdf type": this.type,
-      "reversed": this.reversed,
-      "graphql": this.getName(),
-      "sparql": this.getIRI()
+      rdf: this.type,
+      reversed: this.reversed,
+      graphql: this.getName(),
+      sparql: this.getIRI()
     };
   }
-  
 }
 
-export class TypeFieldMapper implements FieldMapper {
-  private readonly field: GraphQLField<any, any, any>;
-  private readonly fieldTypeIRI: string;
-  private readonly fieldIRI: string;
-  public readonly reversed: boolean;
-  private readonly idArg: GraphQLArgument | undefined;
-  private readonly idField: GraphQLField<any, any, any> | undefined;
+export class TypeFieldMapper extends BaseFieldMapper {
 
-  private readonly schemaMapper: SchemaMapper;
+  private fieldTypeIRI: string;
+  private idArg?: GraphQLArgument;
+  private idField?: GraphQLField<any, any, any>;
 
-  public constructor(field: GraphQLField<any, any, any>, fieldType: GraphQLObjectType, schemaMapper: SchemaMapper) {
-    this.field = field;    
+  constructor(
+    field: GraphQLField<any, any, any>,
+    fieldType: GraphQLObjectType,
+    private schemaMapper: SchemaMapper
+  ) {
+    super(field, schemaMapper);
 
-    // --- Field Type --- //
-    // parse @class decorator
     const typeIRI = getTypeIRI(fieldType);
-    if (typeIRI) {
-      // Replace prefixes
-      this.fieldTypeIRI = schemaMapper.replaceSPARQLPrefix(typeIRI);
-    } else {
-      // set type IRI to field type name in sparql context
-      this.fieldTypeIRI = schemaMapper.toSPARQLContext(fieldType.name);
-    }
 
-    // --- Field Predicate --- //
-    // parse @predicate decorator
-    const [ fieldIRI, reverse ] = getFieldPredicate(this.field);
-    if (fieldIRI) {
-      // Replace prefixes
-      this.fieldIRI = schemaMapper.replaceSPARQLPrefix(fieldIRI);
-    } else {
-      // set field IRI to field name in sparql context
-      this.fieldIRI = schemaMapper.toSPARQLContext(this.field.name);
-    }
-    this.reversed = reverse;
+    this.fieldTypeIRI = typeIRI
+      ? schemaMapper.replaceSPARQLPrefix(typeIRI)
+      : schemaMapper.toSPARQLContext(fieldType.name);
 
-    // --- ID Argument --- //
-    this.idArg = field.args.find(arg => {
-      return getNamedType(arg.type) === GraphQLID && arg.name === "id";
-    });
-    if (this.idArg === undefined && !isScalarType(fieldType)) {
-      this.idField = Object.values(fieldType.getFields()).find(field => {
-        return getNamedType(field.type) === GraphQLID && field.name === "id";
-      });
-    }
-    this.schemaMapper = schemaMapper;
-  }
+    this.idArg = field.args.find(a =>
+      getNamedType(a.type) === GraphQLID && a.name === "id"
+    );
 
-  public getName(): string {
-    return this.field.name
-  }
-
-  public getIRI(): string {
-    return this.fieldIRI;
-  }
-
-  public id(): string | undefined {
-    if (this.idArg !== undefined) {
-      return this.idArg.name;
-    }
-    if (this.idField !== undefined) {
-      return this.idField.name;
+    if (!this.idArg) {
+      this.idField = Object.values(fieldType.getFields())
+        .find(f => getNamedType(f.type) === GraphQLID && f.name === "id");
     }
   }
 
-  public toQuery(node: TreeNode, responseMapper: ResponseMapper): string {
-    responseMapper.addContext(this.field.name);
-    let query = this.field.name;
-
-    if (Object.keys(node.children).length > 0) {
-      // Not a leaf node
-      if (node.term.termType === 'NamedNode') {
-        query += `(${this.id()}: "${node.term.value}")`;
-      }
-
-      query += ' { ';
-
-      if (node.term.termType === 'Variable') {
-        query += `${this.id()} `;
-        responseMapper.addVarMapping(node.term.value, this.id());
-      }
-
-      // Recursively add children
-      for (let [ pred, child ] of Object.entries(node.children)) {
-        const field = this.schemaMapper.getField(this.fieldTypeIRI!, pred)!;
-        const childQuery = field.toQuery(child, responseMapper);
-
-        query += `${childQuery} `;
-      }
-
-      query += '} ';
-    } else if (node.term.termType === 'Variable') {
-      query += ' { id } ';
-      responseMapper.addVarMapping(node.term.value, "id");
-    } else if (node.term.termType === 'Literal') {
-      query += ` @filter(if: "${this.field.name}==${valueFromLiteral(node.term)}") `;
-    } else if (node.term.termType === 'NamedNode') {
-      query += `(id: "${node.term.value}") { id } `;
-    }
-
-    responseMapper.removeContext();
-    return query.replaceAll(/\s+/ug, ' ').trim();
+  private id() {
+    return this.idArg?.name ?? this.idField?.name;
   }
 
-  public withType(type: RDF.Term): boolean {
-    getLogger().debug(`Field ${this.field.name} Type Check`);
-    getLogger().debug(`\ttype ${this.fieldTypeIRI} === ${type.value} ? ${this.fieldTypeIRI === type.value}`);
+  withType(type: RDF.Term) {
+
+    getLogger().debug(
+      `type ${this.fieldTypeIRI} === ${type.value} ? ${this.fieldTypeIRI === type.value}`
+    );
+
     return this.fieldTypeIRI === type.value;
   }
 
-  public withSubject(subj: RDF.Term): boolean {
-    if (subj.termType === 'Variable') {
+  withSubject(subj: RDF.Term) {
+
+    if (subj.termType === "Variable")
       return !this.idArg || !(this.idArg.type instanceof GraphQLNonNull);
-    }
-    return this.idArg !== undefined || this.idField !== undefined;
+
+    return !!this.idArg || !!this.idField;
   }
 
-  public withPredicate(pred: string, node: TreeNode): boolean {
-    getLogger().debug(`Field ${this.field.name} Predicate Check`);
+  withPredicate(pred: string, node: TreeNode) {
+
     const field = this.schemaMapper.getField(this.fieldTypeIRI, pred);
-    getLogger().debug(`\ttype ${this.fieldTypeIRI} has pred ${pred} ? ${!field ? false : true}`);
-    if (!field) {
-      return false;
-    }
 
-    // Check if this field accepts the node term
-    if (!field.withSubject(node.term)) {
-      return false;
-    }
+    if (!field) return false;
+    if (!field.withSubject(node.term)) return false;
 
-    // Check if this field accepts the node type
-    if (node.type && !field.withType(node.type)) {
+    if (node.type && !field.withType(node.type))
       return false;
-    }
 
-    for (const [ child_pred, child_node ] of Object.entries(node.children)) {
-      // Check if this field accepts the children terms
-      if (!field.withPredicate(child_pred, child_node)) {
+    for (const [p, child] of Object.entries(node.children)) {
+      if (!field.withPredicate(p, child))
         return false;
-      }
     }
 
     return true;
   }
 
-  public rep() {
+  toQuery(node: TreeNode, responseMapper: ResponseMapper) {
+
+    responseMapper.addContext(this.field.name);
+
+    let query = this.field.name;
+
+    const id = this.id();
+
+    if (Object.keys(node.children).length) {
+
+      if (node.term.termType === "NamedNode")
+        query += `(${id}: "${node.term.value}")`;
+
+      query += " { ";
+
+      if (node.term.termType === "Variable") {
+        query += `${id} `;
+        responseMapper.addVarMapping(node.term.value, id);
+      }
+
+      for (const [pred, child] of Object.entries(node.children)) {
+
+        const field = this.schemaMapper.getField(this.fieldTypeIRI, pred)!;
+        query += field.toQuery(child, responseMapper) + " ";
+      }
+
+      query += "}";
+
+    } else if (node.term.termType === "Variable") {
+
+      query += " { id }";
+      responseMapper.addVarMapping(node.term.value, "id");
+
+    } else if (node.term.termType === "Literal") {
+
+      query += ` @filter(if: "${this.field.name}==${valueFromLiteral(node.term)}")`;
+
+    } else if (node.term.termType === "NamedNode") {
+
+      query += `(id: "${node.term.value}") { id }`;
+    }
+
+    responseMapper.removeContext();
+
+    return query.trim();
+  }
+
+  rep() {
     return {
-      "type": this.fieldTypeIRI,
-      "reversed": this.reversed,
-      "graphql": this.getName(),
-      "sparql": this.getIRI(),
+      type: this.fieldTypeIRI,
+      reversed: this.reversed,
+      graphql: this.getName(),
+      sparql: this.getIRI()
     };
   }
-}
-
-function filterFields(fields: FieldMapper[], node: TreeNode): FieldMapper[] {
-  let filtered = [ ...fields ];
-
-  if (node.type) {
-    filtered = filtered.filter(field => field.withType(node.type!));
-  }
-
-  filtered = filtered.filter(field => field.withSubject(node.term));
-
-  for (const [ p, child ] of Object.entries(node.children)) {
-    filtered = filtered.filter(field => field.withPredicate(p, child));
-  }
-
-  return filtered;
 }
