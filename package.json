@@ -1,5 +1,5 @@
 {
-  "name": "sparql2graphql-converter",
+  "name": "@comunica-graphql/sparql2graphql-converter",
   "version": "1.0.0",
   "description": "Convert SPARQL queries into GraphQL queries using a provided GraphQL schema and context.",
   "main": "index.js",
