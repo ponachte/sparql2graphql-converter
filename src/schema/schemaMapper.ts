@@ -1,11 +1,12 @@
 import { buildSchema } from "graphql";
 import { getCustomObjectTypes, getFieldPredicate, getTypeIRI, valueFromLiteral } from '../utils/utils';
-import { RawRDF, TreeNode } from '../types';
+import { Edge, RawRDF, TreeNode, Trees } from '../types';
 import type * as RDF from '@rdfjs/types';
 import type { GraphQLArgument, GraphQLField, GraphQLObjectType } from 'graphql';
 import { getNamedType, GraphQLID, isScalarType, GraphQLNonNull } from 'graphql';
 import { getLogger } from '../utils/logger';
 import { ResponseMapper } from "../converter/responseMapper";
+import { collectEdges, buildTrees } from "../utils/trees";
 
 export class SchemaMapper {
 
@@ -96,6 +97,77 @@ export class SchemaMapper {
     return sparqlValue;
   }
 
+  public calculatePossibleTrees(root: TreeNode): TreeNode[] {
+    const edges = collectEdges(root);
+    const combos = this.expandEdgeSets(edges);
+
+    const trees = combos.map(edges => buildTrees(edges));
+
+    return trees.filter(t => t.roots.length === 1).map(t => t.roots[0])
+  }
+
+  private getPredicateFields(pred: string) {
+    const fields = [];
+
+    for (const type of this.types.values()) {
+      for (const field of type.getFields().values()) {
+        if (field.getIRI() === pred) {
+          fields.push(field);
+        }
+      }
+    }
+
+    return fields;
+  }
+
+  private expandEdgeSets(edges: Edge[]): Edge[][] {
+    let combos: Edge[][] = [[]];
+
+    for (const edge of edges) {
+      const variants = this.edgeVariants(edge);
+      if (variants.length === 0) return [];
+
+      const next: Edge[][] = [];
+
+      for (const combo of combos) {
+        for (const v of variants) {
+          next.push([...combo, v]);
+        }
+      }
+
+      combos = next;
+    }
+
+    return combos;
+  }
+
+  private edgeVariants(edge: Edge): Edge[] {
+    const fields = this.getPredicateFields(edge.predicate);
+
+    const hasNormal = fields.some(f => !f.reversed);
+    const hasReversed = fields.some(f => f.reversed);
+
+    if (!hasNormal && !hasReversed) {
+      return [];
+    }
+
+    const variants: Edge[] = [];
+
+    if (hasNormal) {
+      variants.push(edge);
+    }
+
+    if (hasReversed) {
+      variants.push({
+        subject: edge.object,
+        predicate: edge.predicate,
+        object: edge.subject,
+      });
+    }
+
+    return variants;
+  }
+
   public rep() {
     return {
       "type": "schema",
@@ -136,6 +208,10 @@ export class TypeMapper {
     return this.fields.get(iri);
   }
 
+  public getFields() {
+    return this.fields;
+  }
+
   public rep() {
     return {
       "type": this.getIRI(),
@@ -145,11 +221,12 @@ export class TypeMapper {
 }
 
 interface FieldMapper {
+  readonly reversed: boolean
   getName(): string
   getIRI(): string
   withPredicate(pred: string, node: TreeNode): boolean
   withType(type: RDF.Term): boolean
-  withObject(obj: RDF.Term): boolean
+  withSubject(obj: RDF.Term): boolean
   toQuery(node: TreeNode, responseMapper: ResponseMapper): string
   rep(): object
 }
@@ -172,7 +249,7 @@ export class ScalarFieldMapper implements FieldMapper {
   private readonly field: GraphQLField<any, any, any>;
   private readonly type: string
   private readonly fieldIRI: string;
-  private readonly reversed: boolean;
+  public readonly reversed: boolean;
 
   constructor(field: GraphQLField<any, any, any>, type: string, schemaMapper: SchemaMapper) {
     this.field = field;
@@ -180,7 +257,7 @@ export class ScalarFieldMapper implements FieldMapper {
 
     // --- Field Predicate --- //
     // parse @predicate decorator
-    const [ fieldIRI, reversed ] = getFieldPredicate(this.field);
+    const [ fieldIRI, reverse ] = getFieldPredicate(this.field);
     if (fieldIRI) {
       // Replace prefixes
       this.fieldIRI = schemaMapper.replaceSPARQLPrefix(fieldIRI);
@@ -188,7 +265,7 @@ export class ScalarFieldMapper implements FieldMapper {
       // set field IRI to field name in sparql context
       this.fieldIRI = schemaMapper.toSPARQLContext(this.field.name);
     }
-    this.reversed = reversed;
+    this.reversed = reverse;
   }
   
   getName(): string {
@@ -199,17 +276,17 @@ export class ScalarFieldMapper implements FieldMapper {
     return this.fieldIRI;
   }
 
-  withObject(obj: RDF.Term): boolean {
-    getLogger().debug(`Field ${this.field.name} Object Check`);
+  withSubject(obj: RDF.Term): boolean {
+    getLogger().debug(`Field ${this.field.name} Subject Check`);
     if (obj.termType === "Variable") {
-      getLogger().debug(`\t${obj.termType} ${obj.value} ? true`);
+      getLogger().debug(`\t${obj.termType} ${obj.value} -> always true`);
       return true;
     }
     if (this.type == "ID") {
-      getLogger().debug(`\t${obj.termType} ${obj.value} ? ${obj.termType === "NamedNode"}`);
+      getLogger().debug(`\tID -> NamedNode ${obj.value} ? ${obj.termType === "NamedNode"}`);
       return obj.termType === "NamedNode";
     }
-    getLogger().debug(`\t${obj.termType} ${obj.value} ? ${obj.termType === "Literal"}`);
+    getLogger().debug(`\tother scalar type -> Literal ${obj.value} ? ${obj.termType === "Literal"}`);
     return obj.termType === "Literal";
   }
 
@@ -249,7 +326,7 @@ export class RawRDFFieldMapper implements FieldMapper {
   private readonly field: GraphQLField<any, any, any>;
   private readonly type: string;
   private readonly fieldIRI: string;
-  private readonly reversed: boolean;
+  public readonly reversed: boolean;
 
   constructor(field: GraphQLField<any, any, any>, type: string, schemaMapper: SchemaMapper) {
     this.field = field;
@@ -276,7 +353,7 @@ export class RawRDFFieldMapper implements FieldMapper {
     return this.fieldIRI;
   }
 
-  withObject(obj: RDF.Term): boolean {
+  withSubject(obj: RDF.Term): boolean {
     if (obj.termType === "NamedNode") {
       return this.type === 'RDFNode';
     }
@@ -328,7 +405,7 @@ export class TypeFieldMapper implements FieldMapper {
   private readonly field: GraphQLField<any, any, any>;
   private readonly fieldTypeIRI: string;
   private readonly fieldIRI: string;
-  private readonly reverse: boolean;
+  public readonly reversed: boolean;
   private readonly idArg: GraphQLArgument | undefined;
   private readonly idField: GraphQLField<any, any, any> | undefined;
 
@@ -358,7 +435,7 @@ export class TypeFieldMapper implements FieldMapper {
       // set field IRI to field name in sparql context
       this.fieldIRI = schemaMapper.toSPARQLContext(this.field.name);
     }
-    this.reverse = reverse;
+    this.reversed = reverse;
 
     // --- ID Argument --- //
     this.idArg = field.args.find(arg => {
@@ -432,7 +509,7 @@ export class TypeFieldMapper implements FieldMapper {
     return this.fieldTypeIRI === type.value;
   }
 
-  public withObject(subj: RDF.Term): boolean {
+  public withSubject(subj: RDF.Term): boolean {
     if (subj.termType === 'Variable') {
       return !this.idArg || !(this.idArg.type instanceof GraphQLNonNull);
     }
@@ -448,7 +525,7 @@ export class TypeFieldMapper implements FieldMapper {
     }
 
     // Check if this field accepts the node term
-    if (!field.withObject(node.term)) {
+    if (!field.withSubject(node.term)) {
       return false;
     }
 
@@ -470,7 +547,7 @@ export class TypeFieldMapper implements FieldMapper {
   public rep() {
     return {
       "type": this.fieldTypeIRI,
-      "reversed": this.reverse,
+      "reversed": this.reversed,
       "graphql": this.getName(),
       "sparql": this.getIRI(),
     };
@@ -484,7 +561,7 @@ function filterFields(fields: FieldMapper[], node: TreeNode): FieldMapper[] {
     filtered = filtered.filter(field => field.withType(node.type!));
   }
 
-  filtered = filtered.filter(field => field.withObject(node.term));
+  filtered = filtered.filter(field => field.withSubject(node.term));
 
   for (const [ p, child ] of Object.entries(node.children)) {
     filtered = filtered.filter(field => field.withPredicate(p, child));

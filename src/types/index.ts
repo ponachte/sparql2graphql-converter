@@ -17,6 +17,12 @@ export interface Trees {
   nodes: Record<string, TreeNode>;
 }
 
+export interface Edge {
+  subject: TreeNode;
+  predicate: string;
+  object: TreeNode;
+}
+
 export interface ILogger {
   debug(...args: unknown[]): void;
   info(...args: unknown[]): void;
