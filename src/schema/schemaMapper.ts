@@ -306,7 +306,7 @@ export class ScalarFieldMapper extends BaseFieldMapper {
     let query = this.field.name;
 
     if (node.term.termType === "Variable")
-      responseMapper.addVarMapping(node.term.value);
+      responseMapper.addVarMapping(node.term.value, this.type);
 
     else if (node.term.termType === "Literal")
       query += ` @filter(if: "${this.field.name}==${valueFromLiteral(node.term)}")`;
@@ -351,13 +351,14 @@ export class RawRDFFieldMapper extends BaseFieldMapper {
     let query = `${this.field.name} { _rawRDF }`;
 
     if (node.term.termType === "Variable")
-      responseMapper.addVarMapping(node.term.value, "_rawRDF");
+      responseMapper.addVarMapping(node.term.value, this.type, "_rawRDF");
 
-    else if (node.term.termType === "Literal")
+    else if (node.term.termType === "Literal") {
       responseMapper.addFilterMapping({
         "@value": node.term.value,
         "@type": node.term.datatype.value
       });
+    }
 
     else if (node.term.termType === "NamedNode")
       responseMapper.addFilterMapping({ "@id": node.term.value });
@@ -462,7 +463,7 @@ export class TypeFieldMapper extends BaseFieldMapper {
 
       if (node.term.termType === "Variable") {
         query += `${id} `;
-        responseMapper.addVarMapping(node.term.value, id);
+        responseMapper.addVarMapping(node.term.value, "ID", id);
       }
 
       for (const [pred, child] of Object.entries(node.children)) {
@@ -476,7 +477,7 @@ export class TypeFieldMapper extends BaseFieldMapper {
     } else if (node.term.termType === "Variable") {
 
       query += " { id }";
-      responseMapper.addVarMapping(node.term.value, "id");
+      responseMapper.addVarMapping(node.term.value, "ID", "id");
 
     } else if (node.term.termType === "Literal") {
 

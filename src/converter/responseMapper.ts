@@ -7,6 +7,7 @@ export class ResponseMapper {
   private context: string[] = [];
   private varMap: Record<string, string> = {};
   private filterMap: Record<string, RawRDF> = {};
+  private typeMap: Record<string, string> = {};
 
   public addContext(ctx: string): void {
     this.context.push(ctx);
@@ -20,11 +21,13 @@ export class ResponseMapper {
     return this.context.join("_");
   }
 
-  public addVarMapping(sparqlVar: string, field?: string) {
+  public addVarMapping(sparqlVar: string, type: string, field?: string) {
     if (field) {
       this.varMap[sparqlVar] = this.getContext() + "_" + field;
+      this.typeMap[this.getContext() + "_" + field] = type;
     } else {
       this.varMap[sparqlVar] = this.getContext();
+      this.typeMap[this.getContext()] = type;
     }
     
   }
@@ -125,22 +128,9 @@ export class ResponseMapper {
     for (const variable of variables) {
       const varName = variable.value;
       const value = resource[this.varMap[varName]];
-      getLogger().debug(`Variable ${varName} maps to ${this.varMap[varName]} = ${value}`);
-
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        if (value['@id']) {
-          bindings[varName] = dataFactory.namedNode(value['@id']);
-        } else if (value['@value'] && value['@type']) {
-          const valueType = dataFactory.namedNode(value['@type']);
-          bindings[varName] = dataFactory.literal(value['@value'], valueType);
-        } else {
-          throw new Error(
-            `Invalid RawRDF format for variable "${varName}": ${JSON.stringify(value)}`,
-          );
-        }
-      } else {
-        bindings[varName] = termFromValue(value, dataFactory);
-      }
+      const type = this.typeMap[this.varMap[varName]];
+      getLogger().debug(`Variable ${varName} maps to ${this.varMap[varName]} = ${value} with type ${type}`);
+      bindings[varName] = termFromValue(value, type, dataFactory);
     }
 
     return bindingsFactory.bindings(
@@ -148,45 +138,55 @@ export class ResponseMapper {
   }
 }
 
-function termFromValue(value: any, dataFactory: RDF.DataFactory): RDF.Term {
+function termFromValue(value: any, type: string, dataFactory: RDF.DataFactory): RDF.Term {
   const XSD = 'http://www.w3.org/2001/XMLSchema#';
 
-  if (typeof value === 'number') {
-    if (Number.isInteger(value)) {
-      return dataFactory.literal(
-        value.toString(),
-        dataFactory.namedNode(`${XSD}integer`),
-      );
-    }
-
-    return dataFactory.literal(
-      value.toString(),
-      dataFactory.namedNode(`${XSD}decimal`),
-    );
+  if (type === "ID") {
+    return dataFactory.namedNode(value);
   }
 
-  if (typeof value === 'boolean') {
+  if (type === "BoxedLiteral") {
+    const valueType = dataFactory.namedNode(value['@type']);
+    return dataFactory.literal(value['@value'], valueType);
+  }
+
+  if (type === "RDFNode") {
+    if (value['@id']) {
+      return dataFactory.namedNode(value['@id']);
+    } else if (value['@value'] && value['@type']) {
+      const valueType = dataFactory.namedNode(value['@type']);
+      return dataFactory.literal(value['@value'], valueType);
+    }
+  }
+
+  if (type === "Int") {
+    return dataFactory.literal(value, dataFactory.namedNode(`${XSD}integer`));
+  }
+
+  if (type === "Float") {
+    // TODO xsd:float xsd:decimal xsd:double
+    return dataFactory.literal(value, dataFactory.namedNode(`${XSD}decimal`));
+  }
+
+  if (type === 'Boolean') {
     return dataFactory.literal(
       value ? 'true' : 'false',
       dataFactory.namedNode(`${XSD}boolean`),
     );
   }
 
-  // Xsd:dateTime (e.g. 2024-01-01T12:30:00Z)
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?$/u.test(value)) {
+  if (type === "DateTime") {
     return dataFactory.literal(value, dataFactory.namedNode(`${XSD}dateTime`));
   }
 
-  // Xsd:date (e.g. 2024-01-01)
-  if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+  if (type === "Date") {
     return dataFactory.literal(value, dataFactory.namedNode(`${XSD}date`));
   }
 
-  // Xsd:time (e.g. 12:30:00)
-  if (/^\d{2}:\d{2}:\d{2}(?:\.\d+)?$/u.test(value)) {
+  if (type === "Time") {
     return dataFactory.literal(value, dataFactory.namedNode(`${XSD}time`));
   }
 
   // Default string
-  return dataFactory.literal(value, dataFactory.namedNode(`${XSD}string`));
+  return dataFactory.literal(value.toString(), dataFactory.namedNode(`${XSD}string`));
 }
