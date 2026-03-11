@@ -1,10 +1,4 @@
 import * as RDF from "@rdfjs/types"
-import { Algebra } from "sparqlalgebrajs";
-import {
-  TreeNode,
-  Trees
-} from "../types";
-import { getLogger } from "./logger";
 import { GraphQLField, GraphQLNamedType, GraphQLObjectType, GraphQLSchema, Kind } from "graphql";
 
 export function getCustomObjectTypes(schema: GraphQLSchema): GraphQLObjectType[] {
