@@ -31,11 +31,11 @@
     "@comunica/utils-bindings-factory": "^4.2.0",
     "@rdfjs/types": "^2.0.1",
     "graphql": "^16.13.1",
-    "sparqlalgebrajs": "^5.0.2",
-    "typescript": "^5.9.3"
+    "sparqlalgebrajs": "^5.0.2"
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }
