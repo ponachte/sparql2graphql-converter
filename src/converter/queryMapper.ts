@@ -3,6 +3,7 @@ import { SchemaMapper } from '../schema/schemaMapper';
 import { ResponseMapper } from './responseMapper';
 import { convertOperation } from '../utils/trees';
 import { getLogger } from '../utils/logger';
+import { SubscriptionType } from '../types';
 
 export class QueryMapper {
 
@@ -18,9 +19,9 @@ export class QueryMapper {
     return this.queryOperation(operation);
   }
 
-  public subscribe(query: string): [string, ResponseMapper][] {
+  public subscribe(query: string, type?: SubscriptionType): [string, ResponseMapper][] {
     const operation = translate(query);
-    return this.subscribeOperation(operation);
+    return this.subscribeOperation(operation, type);
   }
 
   public queryOperation(operation: Algebra.Operation): [string, ResponseMapper][] {
@@ -51,7 +52,7 @@ export class QueryMapper {
     return results;
   }
 
-  public subscribeOperation(operation: Algebra.Operation): [string, ResponseMapper][] {
+  public subscribeOperation(operation: Algebra.Operation, type?: SubscriptionType): [string, ResponseMapper][] {
     const results: [string, ResponseMapper][] = [];
 
     // Convert operation to tree
@@ -61,7 +62,7 @@ export class QueryMapper {
     for (const possibleTree of this.schemaMapper.calculatePossibleTrees(tree)) {
       getLogger().debug("Trying possible tree: ", JSON.stringify(possibleTree, null, 2));
       // Check if the schema supports the SPARQL query tree
-      const fields = this.schemaMapper.supportsSubscription(possibleTree);
+      const fields = this.schemaMapper.supportsSubscription(possibleTree, type);
 
       // Try to convert the query and return the first succesfull one
       for (const field of fields) {
