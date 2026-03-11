@@ -13,17 +13,19 @@ export class QueryMapper {
     getLogger().debug("With Schema: ", JSON.stringify(this.schemaMapper.rep(), null, 2));
   }
 
-  public query(query: string): [string, ResponseMapper] {
+  public query(query: string): [string, ResponseMapper][] {
     const operation = translate(query);
     return this.queryOperation(operation);
   }
 
-  public subscribe(query: string): [string, ResponseMapper] {
+  public subscribe(query: string): [string, ResponseMapper][] {
     const operation = translate(query);
     return this.subscribeOperation(operation);
   }
 
-  public queryOperation(operation: Algebra.Operation): [string, ResponseMapper] {
+  public queryOperation(operation: Algebra.Operation): [string, ResponseMapper][] {
+    const results: [string, ResponseMapper][] = [];
+
     // Convert operation to tree
     const tree = convertOperation(operation);
 
@@ -38,7 +40,7 @@ export class QueryMapper {
         try {
           const responseMapper = new ResponseMapper();
           const query = field.toQuery(possibleTree, responseMapper);
-          return [ `query { ${query} }`, responseMapper ];
+          results.push([ `query { ${query} }`, responseMapper ]);
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err))
           console.log(`Error creating query for field ${field.getName()}: ${error.message}`);
@@ -46,10 +48,12 @@ export class QueryMapper {
       }
     }
 
-    throw new Error("Schema does not support the given SPARQL query");
+    return results;
   }
 
-  public subscribeOperation(operation: Algebra.Operation): [string, ResponseMapper] {
+  public subscribeOperation(operation: Algebra.Operation): [string, ResponseMapper][] {
+    const results: [string, ResponseMapper][] = [];
+
     // Convert operation to tree
     const tree = convertOperation(operation);
 
@@ -64,7 +68,7 @@ export class QueryMapper {
         try {
           const responseMapper = new ResponseMapper();
           const query = field.toQuery(possibleTree, responseMapper);
-          return [ `subscription { ${query} }`, responseMapper ];
+          results.push([ `subscription { ${query} }`, responseMapper ]);
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err))
           console.log(`Error creating query for field ${field.getName()}: ${error.message}`);
@@ -72,6 +76,6 @@ export class QueryMapper {
       }
     }
 
-    throw new Error("Schema does not support the given SPARQL query");
+    return results;
   }
 }

@@ -2,6 +2,7 @@ import { RawRDF, Resource } from "../types";
 import { ComunicaDataFactory } from "@comunica/types";
 import * as RDF from "@rdfjs/types";
 import { getLogger } from "../utils/logger";
+import { BindingsFactory, Bindings } from "@comunica/utils-bindings-factory"; 
 
 export class ResponseMapper {
   private context: string[] = [];
@@ -40,9 +41,9 @@ export class ResponseMapper {
     data: any,
     variables: RDF.Variable[],
     dataFactory: ComunicaDataFactory,
-    bindingsFactory: RDF.BindingsFactory, 
+    bindingsFactory: BindingsFactory, 
     prefix = ''
-  ): RDF.Bindings[] {
+  ): Bindings[] {
     function recurse(value: any, keyPrefix: string): Resource[] {
 
       // Primitive → single resource
@@ -93,15 +94,15 @@ export class ResponseMapper {
 
     return recurse(data, prefix)
       .map(r => this.resourceToBindings(r, variables, dataFactory, bindingsFactory))
-      .filter((b): b is RDF.Bindings => b !== undefined);
+      .filter((b): b is Bindings => b !== undefined);
   }
 
   private resourceToBindings(
     resource: Resource, 
     variables: RDF.Variable[],
     dataFactory: ComunicaDataFactory,
-    bindingsFactory: RDF.BindingsFactory,
-  ): RDF.Bindings | undefined {
+    bindingsFactory: BindingsFactory,
+  ): Bindings | undefined {
     getLogger().debug("Resource: ", JSON.stringify(resource, null, 2));
     const bindings: Record<string, RDF.Term> = {};
 

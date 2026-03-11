@@ -1,6 +1,6 @@
 import { buildSchema, getNamedType, GraphQLID, isScalarType, GraphQLNonNull } from "graphql";
-import { getCustomObjectTypes, getFieldPredicate, getTypeIRI, valueFromLiteral } from "../utils/utils";
-import { Edge, TreeNode } from "../types";
+import { getCustomObjectTypes, getFieldPredicate, getSubscriptionType, getTypeIRI, valueFromLiteral } from "../utils/utils";
+import { Edge, SubscriptionType, TreeNode } from "../types";
 import type * as RDF from "@rdfjs/types";
 import type { GraphQLArgument, GraphQLField, GraphQLObjectType } from "graphql";
 import { getLogger } from "../utils/logger";
@@ -28,9 +28,14 @@ function filterFields(fields: FieldMapper[], node: TreeNode): FieldMapper[] {
   });
 }
 
+type subscriptionType = "addition" | "deletion";
+
 export class SchemaMapper {
 
-  private subscriptionFields: FieldMapper[] = [];
+  private subscriptionFields: Record<subscriptionType, FieldMapper[]> = {
+    "addition": [],
+    "deletion": []
+  };
   private queryFields: FieldMapper[] = [];
 
   private readonly types = new Map<string, TypeMapper>();
@@ -63,9 +68,14 @@ export class SchemaMapper {
       this.types.set(mapper.getIRI(), mapper);
     }
 
-    if (subType)
-      this.subscriptionFields = Object.values(subType.getFields())
-        .map(f => FieldMapperFactory.map(f, this));
+    if (subType) {
+      for (const field of Object.values(subType.getFields())) {
+        const type = getSubscriptionType(field);
+        if (type) {
+          this.subscriptionFields[type].push(FieldMapperFactory.map(field, this));
+        }
+      }
+    }
 
     if (queryType)
       this.queryFields = Object.values(queryType.getFields())
@@ -76,8 +86,14 @@ export class SchemaMapper {
     return filterFields(this.queryFields, node);
   }
 
-  supportsSubscription(node: TreeNode) {
-    return filterFields(this.subscriptionFields, node);
+  supportsSubscription(node: TreeNode, type?: SubscriptionType) {
+    if (!type) {
+      return filterFields([...this.subscriptionFields["addition"], ... this.subscriptionFields["deletion"]], node)
+    }
+    if (type === "addition") {
+      return filterFields(this.subscriptionFields["addition"], node)
+    }
+    return filterFields(this.subscriptionFields["deletion"], node);
   }
 
   getField(typeIRI: string, fieldIRI: string) {
@@ -173,7 +189,10 @@ export class SchemaMapper {
       type: "schema",
       types: [...this.types.values()].map(t => t.rep()),
       query: this.queryFields.map(f => f.getName()),
-      subscribe: this.subscriptionFields.map(f => f.getName())
+      subscribe: {
+        "addition": this.subscriptionFields["addition"].map(f => f.getName()),
+        "deletion": this.subscriptionFields["deletion"].map(f => f.getName())
+      }
     };
   }
 }
